@@ -1,6 +1,5 @@
 ## Library Management System — Database Triggers Demo
 
-> **IM101 Activity** — Lim, Jasper  
 > A modern Library Management System built with PHP & MySQL showcasing **database triggers**.
 
 ## How to Run
