@@ -14,7 +14,7 @@
 
 ---
 
-## 🗄️ Database Setup (SQL)
+##  Database Setup (SQL)
 
 Open phpMyAdmin → SQL tab → paste and execute:
 
