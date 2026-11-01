@@ -10,7 +10,7 @@
 ### Steps
 1. **Start XAMPP** — Enable both **Apache** and **MySQL** modules
 2. **Create the Database** — Open phpMyAdmin (`http://localhost/phpmyadmin`) and run the SQL setup below
-3. **Open the app** — Navigate to: `http://localhost/IM101_Lim_Jasper_DatabaseTrigger/index.php`
+3. **Open the app** — Navigate to: `http://localhost/your projuect folder name/index.php`
 
 ---
 
