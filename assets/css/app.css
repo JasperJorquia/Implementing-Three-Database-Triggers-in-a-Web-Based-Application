@@ -757,8 +757,6 @@ body { background: #101827; font-size: 13px; }
 .qr-preview canvas, .qr-preview img { max-width: 100%; height: auto; }
 .qr-book-details { color: var(--text-secondary); font-size: .82rem; line-height: 1.6; }
 .qr-help { margin-top: 8px; color: var(--text-muted); font-size: .74rem; }
-.qr-url-row { display: flex; gap: 8px; align-items: center; }
-.qr-url-row .form-control { min-width: 0; }
 .qr-print-title { display: none; }
 .qr-scanner-reader {
     width: 100%;
@@ -828,7 +826,6 @@ body { background: #101827; font-size: 13px; }
     }
     body.print-qr-active #bookQrModal .modal-header,
     body.print-qr-active #bookQrModal .modal-footer,
-    body.print-qr-active #bookQrModal .qr-url-controls { display: none !important; }
     body.print-qr-active #bookQrModal .modal-body { text-align: center; }
     body.print-qr-active #bookQrModal .qr-book-details,
     body.print-qr-active #bookQrModal .qr-print-title { display: block; color: #000; }
@@ -973,8 +970,6 @@ body { background: #101827; font-size: 13px; }
     }
     .modal-footer .btn { min-height: 44px; }
     .form-control { min-height: 44px; font-size: 16px; }
-    .qr-url-row { align-items: stretch; flex-direction: column; }
-    .qr-url-row .btn { min-height: 44px; justify-content: center; }
     .book-copy-row { align-items: flex-start; flex-direction: column; }
     .book-copy-row .btn { min-height: 42px; }
     .qr-preview { min-height: 0; padding: 10px; }

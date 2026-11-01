@@ -1,9 +1,6 @@
 <?php
 
 require_once dirname(__DIR__) . '/db.php';
-require_once __DIR__ . '/qr-network.php';
-
-$qrPhoneOrigin = detectQrPhoneOrigin();
 
 $totalBooks = $pdo->query("SELECT COUNT(*) FROM books")->fetchColumn();
 $totalAvailable = $pdo->query("SELECT SUM(available_copies) FROM books")->fetchColumn() ?: 0;
@@ -113,7 +110,6 @@ $msgMap = [
 ];
 
 $pageConfig = [
-    'phoneOrigin' => $qrPhoneOrigin,
     'bookCopies' => $bookCopies,
     'message' => isset($msgMap[$msg])
         ? ['text' => $msgMap[$msg][0], 'type' => $msgMap[$msg][1]]

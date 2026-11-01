@@ -337,16 +337,7 @@ require_once __DIR__ . '/includes/dashboard-data.php';
                 <h2 class="qr-print-title" id="bookQrPrintTitle"></h2>
                 <p class="qr-book-details" id="bookQrDetails"></p>
                 <p class="qr-help" id="bookQrReuseHelp">This QR identifies one physical copy. Keep the label attached to the book; scanning it borrows the copy when available or starts its return when checked out.</p>
-                <div class="qr-url-controls">
-                    <label class="form-group" for="phoneAppUrl">
-                        <span>Laptop address for the phone</span>
-                        <span class="qr-url-row">
-                            <input type="url" id="phoneAppUrl" class="form-control" autocomplete="url" spellcheck="false">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="refreshBookQr();">Update QR</button>
-                        </span>
-                    </label>
-                    <p class="qr-help" id="qrAddressHelp">This address is detected from the laptop running XAMPP. Keep the phone on the same Wi-Fi network. If the address is not reachable, enter the laptop's Wi-Fi IPv4 address instead.</p>
-                </div>
+                <p class="qr-help">QR links always use http://localhost. They open this app on the laptop; a phone's localhost refers to the phone itself.</p>
                 <div class="qr-preview" id="bookQrCode" aria-label="Generated book QR code"></div>
                 <p class="qr-book-details" id="bookQrTarget"></p>
             </div>
@@ -438,6 +429,6 @@ require_once __DIR__ . '/includes/dashboard-data.php';
     <script>
         window.libraryAppConfig = <?= json_encode($pageConfig, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
     </script>
-    <script src="assets/js/app.js?v=4" defer></script>
+    <script src="assets/js/app.js?v=5" defer></script>
 </body>
 </html>

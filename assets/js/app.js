@@ -83,11 +83,7 @@
         }
 
         function buildQrUrl() {
-            const input = document.getElementById('phoneAppUrl');
-            const baseUrl = new URL(input.value.trim());
-            if (!['http:', 'https:'].includes(baseUrl.protocol) || baseUrl.username || baseUrl.password || baseUrl.search || baseUrl.hash) {
-                throw new Error('Enter the app address only, without a query string or #fragment.');
-            }
+            const baseUrl = new URL(window.location.pathname, 'http://localhost');
             baseUrl.searchParams.set(currentQrTarget.parameter, currentQrTarget.id);
             return baseUrl.toString();
         }
@@ -118,12 +114,6 @@
             document.getElementById('bookQrTitle').textContent = `${target.label}: ${target.title}`;
             document.getElementById('bookQrPrintTitle').textContent = target.title;
             document.getElementById('bookQrDetails').textContent = target.details;
-            const detectedOrigin = window.libraryAppConfig.phoneOrigin;
-            const appUrl = new URL(window.location.pathname, detectedOrigin || window.location.origin);
-            document.getElementById('phoneAppUrl').value = appUrl.toString();
-            if (!detectedOrigin) {
-                document.getElementById('qrAddressHelp').textContent = 'Could not detect the laptop network address. Enter its Wi-Fi IPv4 address and keep the phone on the same Wi-Fi network.';
-            }
             openModal('bookQrModal');
 
             try {
@@ -209,9 +199,9 @@
                     input.remove();
                     if (!copied) throw new Error('Copy is unavailable. Select and copy the link shown below the QR code.');
                 }
-                showToast('Phone borrowing link copied.', 'success');
+                showToast('Local QR link copied.', 'success');
             } catch (error) {
-                showToast(error.message || 'Could not copy the phone borrowing link.', 'error');
+                showToast(error.message || 'Could not copy the local QR link.', 'error');
             }
         }
 
@@ -340,7 +330,7 @@
                 return;
             }
 
-            const allowedOrigins = [window.location.origin, window.libraryAppConfig.phoneOrigin].filter(Boolean);
+            const allowedOrigins = [window.location.origin, 'http://localhost', 'https://localhost'];
             const appPath = new URL(window.location.pathname, window.location.origin).pathname;
             const isCopyCode = scannedUrl.searchParams.has('copy') && scannedUrl.searchParams.size === 1;
             const isBorrowCode = scannedUrl.searchParams.has('borrow_book') && scannedUrl.searchParams.size === 1;
