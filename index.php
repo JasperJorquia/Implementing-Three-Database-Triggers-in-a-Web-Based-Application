@@ -722,6 +722,64 @@ $msgMap = [
             .trigger-footer .btn { margin-left: 49px; }
             .data-table td, .data-table thead th { padding: 10px 11px; }
         }
+
+        /* Subtle visual polish without changing the existing type or palette. */
+        .sidebar { box-shadow: 8px 0 28px rgba(0,0,0,.12); }
+        .nav-item { position: relative; }
+        .nav-item.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 9px;
+            bottom: 9px;
+            width: 3px;
+            border-radius: 0 3px 3px 0;
+            background: #3a9b93;
+        }
+        .stat-card { background: linear-gradient(145deg, #18283d, #152235 75%); box-shadow: var(--shadow-sm); }
+        .tabs-container { box-shadow: var(--shadow-md); }
+        .tabs-header { gap: 3px; }
+        .tab-btn { border-radius: 7px 7px 0 0; }
+        .catalog-toolbar { background: rgba(16,27,43,.35); }
+        .search-field, .catalog-toolbar select {
+            transition: border-color var(--transition), box-shadow var(--transition);
+        }
+        .search-field:focus-within, .catalog-toolbar select:focus {
+            border-color: #3b9a94;
+            box-shadow: 0 0 0 3px rgba(59,154,148,.12);
+            outline: none;
+        }
+        .data-table tbody tr { transition: background var(--transition), box-shadow var(--transition); }
+        .data-table tbody tr:hover { box-shadow: inset 3px 0 #3a9b93; }
+        .badge-status { white-space: nowrap; }
+        .btn { transition: transform var(--transition), background var(--transition), border-color var(--transition), box-shadow var(--transition); }
+        .btn:active { transform: translateY(1px); }
+        :focus-visible { outline: 2px solid #72a7ff; outline-offset: 3px; }
+        .modal { max-height: calc(100vh - 32px); overflow-y: auto; }
+        .confirm-box { box-shadow: var(--shadow-lg); }
+        .toast { backdrop-filter: blur(12px); }
+        @media (max-width: 768px) {
+            .sidebar { box-shadow: 12px 0 32px rgba(0,0,0,.3); }
+            .tabs-header { overflow-x: auto; }
+            .tab-btn { flex: 0 0 auto; }
+            .search-field { min-width: 100%; }
+        }
+        .tab-panel.active { animation: fadeInUp .24s ease-out both; }
+        .mobile-toggle { transition: transform var(--transition), box-shadow var(--transition); }
+        .mobile-toggle:hover { transform: translateY(-2px); }
+        .filter-empty { padding: 38px 20px; }
+        .filter-empty[hidden] { display: none; }
+        .modal-overlay, .confirm-overlay { overscroll-behavior: contain; }
+        .modal-overlay.show .modal { will-change: transform; }
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            *, *::before, *::after {
+                animation-duration: .01ms !important;
+                animation-iteration-count: 1 !important;
+                scroll-behavior: auto !important;
+                transition-duration: .01ms !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -790,14 +848,14 @@ $msgMap = [
             </div>
 
             <div class="tabs-container animate-in delay-5" id="tabs-container">
-                <div class="tabs-header">
-                    <button class="tab-btn active" data-tab="books" onclick="switchTab('books');">
+                <div class="tabs-header" role="tablist" aria-label="Library records">
+                    <button class="tab-btn active" id="tab-books" role="tab" aria-selected="true" aria-controls="panel-books" data-tab="books" onclick="switchTab('books');">
                         ▤ All books <span class="tab-count"><?= count($books) ?></span>
                     </button>
-                    <button class="tab-btn" data-tab="loans" onclick="switchTab('loans');">
+                    <button class="tab-btn" id="tab-loans" role="tab" aria-selected="false" aria-controls="panel-loans" data-tab="loans" onclick="switchTab('loans');">
                         ⇄ Checked out <span class="tab-count"><?= count($loans) ?></span>
                     </button>
-                    <button class="tab-btn" data-tab="audit" onclick="switchTab('audit');">
+                    <button class="tab-btn" id="tab-audit" role="tab" aria-selected="false" aria-controls="panel-audit" data-tab="audit" onclick="switchTab('audit');">
                         ☷ Audit trail <span class="tab-count"><?= count($logs) ?></span>
                     </button>
                 </div>
@@ -805,10 +863,10 @@ $msgMap = [
                 <div class="catalog-toolbar">
                     <label class="search-field" for="bookSearch"><span aria-hidden="true">⌕</span><input id="bookSearch" type="search" placeholder="Search by title, author, ISBN or book ID..."></label>
                     <select id="bookStatusFilter" aria-label="Filter by availability"><option value="all">All statuses</option><option value="available">Available</option><option value="unavailable">Unavailable</option></select>
-                    <span class="sort-label">Sorted by book ID ↑</span>
+                    <span class="sort-label" id="bookResultCount" aria-live="polite"><?= count($books) ?> books · Sorted by book ID ↑</span>
                 </div>
 
-                <div class="tab-panel active" id="panel-books">
+                <div class="tab-panel active" id="panel-books" role="tabpanel" aria-labelledby="tab-books">
                     <?php if (count($books) > 0): ?>
                     <div style="overflow-x:auto;">
                         <table class="data-table" id="books-table">
@@ -859,6 +917,10 @@ $msgMap = [
                             </tbody>
                         </table>
                     </div>
+                    <div class="empty-state filter-empty" id="bookNoResults" role="status" hidden>
+                        <h3>No matching books</h3>
+                        <p>Try a different search or availability filter.</p>
+                    </div>
                     <?php else: ?>
                     <div class="empty-state">
                         <h3>No Books Yet</h3>
@@ -869,7 +931,7 @@ $msgMap = [
                     <?php endif; ?>
                 </div>
 
-                <div class="tab-panel" id="panel-loans">
+                <div class="tab-panel" id="panel-loans" role="tabpanel" aria-labelledby="tab-loans">
                     <?php if (count($loans) > 0): ?>
                     <div style="overflow-x:auto;">
                         <table class="data-table" id="loans-table">
@@ -913,7 +975,7 @@ $msgMap = [
                     <?php endif; ?>
                 </div>
 
-                <div class="tab-panel" id="panel-audit">
+                <div class="tab-panel" id="panel-audit" role="tabpanel" aria-labelledby="tab-audit">
                     <?php if (count($logs) > 0): ?>
                     <div style="overflow-x:auto;">
                         <table class="data-table" id="audit-table">
@@ -952,11 +1014,11 @@ $msgMap = [
         </div>
     </main>
 
-    <div class="modal-overlay" id="addBookModal">
-        <div class="modal">
+    <div class="modal-overlay" id="addBookModal" aria-hidden="true">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="addBookTitle">
             <div class="modal-header">
-                <h3> Add New Book</h3>
-                <button class="modal-close" onclick="closeModal('addBookModal');">✕</button>
+                <h3 id="addBookTitle"> Add New Book</h3>
+                <button type="button" class="modal-close" aria-label="Close add book dialog" onclick="closeModal('addBookModal');">✕</button>
             </div>
             <form action="action.php?action=add_book" method="POST">
                 <div class="modal-body">
@@ -987,11 +1049,11 @@ $msgMap = [
         </div>
     </div>
 
-    <div class="modal-overlay" id="borrowModal">
-        <div class="modal">
+    <div class="modal-overlay" id="borrowModal" aria-hidden="true">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="borrowBookTitle">
             <div class="modal-header">
-                <h3> Borrow Book</h3>
-                <button class="modal-close" onclick="closeModal('borrowModal');">✕</button>
+                <h3 id="borrowBookTitle"> Borrow Book</h3>
+                <button type="button" class="modal-close" aria-label="Close borrow dialog" onclick="closeModal('borrowModal');">✕</button>
             </div>
             <form action="action.php?action=borrow" method="POST">
                 <input type="hidden" name="book_id" id="borrow-book-id">
@@ -1013,9 +1075,9 @@ $msgMap = [
         </div>
     </div>
 
-    <div class="confirm-overlay" id="confirmDeleteOverlay">
-        <div class="confirm-box">
-            <h3>Delete Book?</h3>
+    <div class="confirm-overlay" id="confirmDeleteOverlay" aria-hidden="true">
+        <div class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="confirmDeleteTitle" tabindex="-1">
+            <h3 id="confirmDeleteTitle">Delete Book?</h3>
             <p id="confirm-delete-text">Are you sure you want to delete this book? A BEFORE DELETE trigger will archive it to audit logs.</p>
             <div class="confirm-actions">
                 <button type="button" class="btn btn-secondary btn-sm" onclick="closeConfirm();">Cancel</button>
@@ -1027,38 +1089,60 @@ $msgMap = [
         </div>
     </div>
 
-    <button class="mobile-toggle" id="mobileToggle" onclick="toggleSidebar();">☰</button>
+    <button class="mobile-toggle" id="mobileToggle" type="button" aria-label="Open navigation menu" aria-controls="sidebar" aria-expanded="false" onclick="toggleSidebar();">☰</button>
 
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
+        const modalReturnFocus = new Map();
+
         function switchTab(tabName) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                const isActive = btn.dataset.tab === tabName;
+                btn.classList.toggle('active', isActive);
+                btn.setAttribute('aria-selected', String(isActive));
+            });
             document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
-            document.querySelector(`.tab-btn[data-tab="${tabName}"]`).classList.add('active');
             document.getElementById(`panel-${tabName}`).classList.add('active');
 
             document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
             const navItem = document.querySelector(`.nav-item[data-section="${tabName}"]`);
             if (navItem) navItem.classList.add('active');
-            document.getElementById('tabs-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            document.getElementById('tabs-container').scrollIntoView({
+                behavior: prefersReducedMotion ? 'auto' : 'smooth',
+                block: 'start'
+            });
+            closeSidebar();
         }
 
         function scrollToTop() {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
             document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
             document.querySelector('.nav-item[data-section="dashboard"]').classList.add('active');
+            closeSidebar();
         }
 
         function openModal(id) {
             const modal = document.getElementById(id);
+            modalReturnFocus.set(id, document.activeElement);
+            modal.setAttribute('aria-hidden', 'false');
             modal.style.display = 'flex';
-            requestAnimationFrame(() => modal.classList.add('show'));
+            requestAnimationFrame(() => {
+                if (modal.getAttribute('aria-hidden') === 'true') return;
+                modal.classList.add('show');
+                modal.querySelector('.modal-body input:not([type="hidden"])')?.focus();
+            });
         }
         function closeModal(id) {
             const modal = document.getElementById(id);
             modal.classList.remove('show');
-            setTimeout(() => { modal.style.display = 'none'; }, 300);
+            modal.setAttribute('aria-hidden', 'true');
+            setTimeout(() => {
+                if (modal.classList.contains('show')) return;
+                modal.style.display = 'none';
+                modalReturnFocus.get(id)?.focus();
+                modalReturnFocus.delete(id);
+            }, 300);
         }
         function openBorrowModal(bookId, bookTitle) {
             document.getElementById('borrow-book-id').value = bookId;
@@ -1068,44 +1152,92 @@ $msgMap = [
         }
 
         function confirmDelete(bookId, bookTitle) {
+            const overlay = document.getElementById('confirmDeleteOverlay');
+            modalReturnFocus.set('confirmDeleteOverlay', document.activeElement);
             document.getElementById('confirm-delete-text').textContent =
                 `Are you sure you want to delete "${bookTitle}"? The BEFORE DELETE trigger will archive this record to audit logs automatically.`;
             document.getElementById('confirm-delete-book-id').value = bookId;
-            document.getElementById('confirmDeleteOverlay').classList.add('show');
+            overlay.setAttribute('aria-hidden', 'false');
+            overlay.classList.add('show');
+            overlay.querySelector('.confirm-box').focus();
         }
         function closeConfirm() {
             document.getElementById('confirmDeleteOverlay').classList.remove('show');
+            document.getElementById('confirmDeleteOverlay').setAttribute('aria-hidden', 'true');
+            modalReturnFocus.get('confirmDeleteOverlay')?.focus();
+            modalReturnFocus.delete('confirmDeleteOverlay');
         }
 
         function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('open');
+            const isOpen = document.getElementById('sidebar').classList.toggle('open');
+            const toggle = document.getElementById('mobileToggle');
+            toggle.setAttribute('aria-expanded', String(isOpen));
+            toggle.setAttribute('aria-label', isOpen ? 'Close navigation menu' : 'Open navigation menu');
+        }
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('mobileToggle').setAttribute('aria-expanded', 'false');
+            document.getElementById('mobileToggle').setAttribute('aria-label', 'Open navigation menu');
         }
         document.querySelectorAll('.modal-overlay').forEach(overlay => {
             overlay.addEventListener('click', function(e) {
                 if (e.target === this) {
-                    this.classList.remove('show');
-                    setTimeout(() => { this.style.display = 'none'; }, 300);
+                    closeModal(this.id);
                 }
             });
         });
 
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
-                document.querySelectorAll('.modal-overlay.show').forEach(m => closeModal(m.id));
-                closeConfirm();
+                const openModalOverlay = document.querySelector('.modal-overlay.show');
+                if (openModalOverlay) closeModal(openModalOverlay.id);
+                else if (document.getElementById('confirmDeleteOverlay').classList.contains('show')) closeConfirm();
+                return;
+            }
+
+            if (e.key === 'Tab') {
+                const activeDialog = document.querySelector('.modal-overlay.show .modal, .confirm-overlay.show .confirm-box');
+                if (!activeDialog) return;
+                const focusable = [...activeDialog.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')];
+                if (focusable.length === 0) {
+                    e.preventDefault();
+                    activeDialog.focus();
+                    return;
+                }
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (e.shiftKey && (document.activeElement === first || document.activeElement === activeDialog)) {
+                    e.preventDefault();
+                    last.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
             }
         });
 
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const bookSearch = document.getElementById('bookSearch');
         const bookStatusFilter = document.getElementById('bookStatusFilter');
         function filterBooks() {
             const query = (bookSearch?.value || '').trim().toLowerCase();
             const status = bookStatusFilter?.value || 'all';
-            document.querySelectorAll('#books-table tbody tr').forEach(row => {
+            const rows = [...document.querySelectorAll('#books-table tbody tr')];
+            let visibleCount = 0;
+            rows.forEach(row => {
                 const matchesText = (row.dataset.search || '').includes(query);
                 const matchesStatus = status === 'all' || row.dataset.status === status;
                 row.hidden = !(matchesText && matchesStatus);
+                if (!row.hidden) visibleCount++;
             });
+            const noResults = document.getElementById('bookNoResults');
+            if (noResults) noResults.hidden = visibleCount > 0;
+            const resultCount = document.getElementById('bookResultCount');
+            if (resultCount) {
+                resultCount.textContent = query || status !== 'all'
+                    ? `Showing ${visibleCount} of ${rows.length} books · Sorted by book ID ↑`
+                    : `${rows.length} books · Sorted by book ID ↑`;
+            }
         }
         bookSearch?.addEventListener('input', filterBooks);
         bookStatusFilter?.addEventListener('change', filterBooks);
@@ -1114,7 +1246,11 @@ $msgMap = [
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
             toast.className = `toast toast-${type}`;
-            toast.innerHTML = `<span>${message}</span>`;
+            toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+            toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+            const text = document.createElement('span');
+            text.textContent = message;
+            toast.appendChild(text);
             container.appendChild(toast);
             setTimeout(() => toast.remove(), 4000);
         }
