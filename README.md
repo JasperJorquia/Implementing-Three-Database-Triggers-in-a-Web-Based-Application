@@ -10,7 +10,7 @@
 ### Steps
 1. **Start XAMPP** — Enable both **Apache** and **MySQL** modules
 2. **Create the Database** — Open phpMyAdmin (`http://localhost/phpmyadmin`) and run the SQL setup below
-3. **Open the app** — Navigate to: `http://localhost/your projuect folder name/index.php`
+3. **Open the app** — Double-click `Open Library Management System.url` in the project folder, or visit `http://localhost/Implementing-Three-Database-Triggers-in-a-Web-Based-Application/`
 
 ---
 
@@ -98,4 +98,3 @@ INSERT INTO books (title, author, isbn, available_copies) VALUES
 ```
 
 ---
-
