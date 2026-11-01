@@ -1,28 +1,5 @@
 <?php
-
-require_once 'db.php';
-
-$totalBooks = $pdo->query("SELECT COUNT(*) FROM books")->fetchColumn();
-$totalAvailable = $pdo->query("SELECT SUM(available_copies) FROM books")->fetchColumn() ?: 0;
-$activeLoans = $pdo->query("SELECT COUNT(*) FROM loans WHERE status = 'Borrowed'")->fetchColumn();
-$auditCount = $pdo->query("SELECT COUNT(*) FROM audit_logs")->fetchColumn();
-
-$loans = $pdo->query("SELECT l.*, b.title FROM loans l JOIN books b ON l.book_id = b.book_id WHERE l.status = 'Borrowed' ORDER BY l.loan_id DESC")->fetchAll();
-$books = $pdo->query("SELECT * FROM books ORDER BY book_id DESC")->fetchAll();
-$bookCount = count($books);
-$logs = $pdo->query("SELECT * FROM audit_logs ORDER BY log_id DESC")->fetchAll();
-
-$msg = $_GET['msg'] ?? '';
-$msgMap = [
-    'borrowed' => ['Book borrowed successfully!', 'success'],
-    'returned' => ['Book returned successfully!', 'success'],
-    'deleted'  => ['Book deleted successfully!', 'warning'],
-    'added'    => ['New book added successfully!', 'success'],
-    'invalid'  => ['Please check the submitted information and try again.', 'error'],
-    'not_active' => ['That loan is no longer active.', 'warning'],
-    'not_found' => ['That book could not be found.', 'warning'],
-    'error'    => ['The database could not complete that action. Check the server log.', 'error'],
-];
+require_once __DIR__ . '/includes/dashboard-data.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -34,753 +11,7 @@ $msgMap = [
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        :root {
-            --bg-primary: #0f172a;
-            --bg-secondary: #1e293b;
-            --bg-card: #1e293b;
-            --bg-card-hover: #263348;
-            --bg-input: #0f172a;
-            --bg-table-row: #1e293b;
-            --bg-table-hover: #263348;
-            --border-color: #334155;
-            --border-light: #475569;
-            --text-primary: #f1f5f9;
-            --text-secondary: #94a3b8;
-            --text-muted: #64748b;
-            --accent-blue: #3b82f6;
-            --accent-blue-glow: rgba(59, 130, 246, 0.25);
-            --accent-green: #22c55e;
-            --accent-green-glow: rgba(34, 197, 94, 0.2);
-            --accent-amber: #f59e0b;
-            --accent-amber-glow: rgba(245, 158, 11, 0.2);
-            --accent-purple: #a855f7;
-            --accent-purple-glow: rgba(168, 85, 247, 0.2);
-            --accent-red: #ef4444;
-            --accent-red-glow: rgba(239, 68, 68, 0.2);
-            --accent-cyan: #06b6d4;
-            --radius-sm: 8px;
-            --radius-md: 12px;
-            --radius-lg: 16px;
-            --radius-xl: 20px;
-            --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
-            --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-            --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
-            --sidebar-width: 260px;
-            --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        html { scroll-behavior: smooth; }
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            line-height: 1.6;
-            min-height: 100vh;
-            display: flex;
-            overflow-x: hidden;
-        }
-        a { color: var(--accent-blue); text-decoration: none; }
-        button { font-family: inherit; cursor: pointer; border: none; }
-        input, select { font-family: inherit; }
-
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
-
-        .sidebar {
-            width: var(--sidebar-width);
-            background: var(--bg-secondary);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            position: fixed;
-            top: 0; left: 0;
-            height: 100vh;
-            z-index: 100;
-            transition: transform var(--transition);
-        }
-        .sidebar-brand {
-            padding: 28px 24px 24px;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .sidebar-brand h1 {
-            font-size: 1.2rem;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .sidebar-brand h1 .brand-icon {
-            width: 36px; height: 36px;
-            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-            border-radius: var(--radius-sm);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.1rem;
-        }
-        .sidebar-brand p {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            margin-top: 6px;
-            font-weight: 500;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-        }
-        .sidebar-nav { padding: 16px 12px; flex: 1; }
-        .nav-label {
-            font-size: 0.65rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--text-muted);
-            padding: 8px 12px 8px;
-            margin-top: 8px;
-        }
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 11px 16px;
-            border-radius: var(--radius-sm);
-            color: var(--text-secondary);
-            font-size: 0.875rem;
-            font-weight: 500;
-            transition: all var(--transition);
-            cursor: pointer;
-            margin-bottom: 2px;
-        }
-        .nav-item:hover { background: var(--bg-card-hover); color: var(--text-primary); }
-        .nav-item.active {
-            background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(168,85,247,0.1));
-            color: var(--accent-blue);
-            font-weight: 600;
-        }
-        .nav-item .nav-icon { font-size: 1.1rem; width: 22px; text-align: center; }
-        .nav-item .badge {
-            margin-left: auto;
-            background: var(--accent-blue);
-            color: #fff;
-            font-size: 0.65rem;
-            font-weight: 700;
-            padding: 2px 8px;
-            border-radius: 50px;
-            min-width: 22px;
-            text-align: center;
-        }
-        .sidebar-footer {
-            padding: 16px 20px;
-            border-top: 1px solid var(--border-color);
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-align: center;
-        }
-        .sidebar-footer span { font-weight: 600; color: var(--text-secondary); }
-
-        .main-content {
-            margin-left: var(--sidebar-width);
-            flex: 1;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .topbar {
-            padding: 16px 32px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid var(--border-color);
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            position: sticky;
-            top: 0;
-            z-index: 50;
-        }
-        .topbar-left h2 {
-            font-size: 1.3rem;
-            font-weight: 700;
-            letter-spacing: -0.01em;
-        }
-        .topbar-left p {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            margin-top: 2px;
-        }
-        .topbar-actions { display: flex; gap: 10px; }
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
-            border-radius: var(--radius-sm);
-            font-size: 0.85rem;
-            font-weight: 600;
-            transition: all var(--transition);
-            border: none;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent-blue), #2563eb);
-            color: #fff;
-            box-shadow: 0 2px 12px var(--accent-blue-glow);
-        }
-        .btn-primary:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 20px var(--accent-blue-glow);
-        }
-        .btn-secondary {
-            background: var(--bg-card);
-            color: var(--text-primary);
-            border: 1px solid var(--border-color);
-        }
-        .btn-secondary:hover { background: var(--bg-card-hover); border-color: var(--border-light); }
-        .btn-danger {
-            background: rgba(239, 68, 68, 0.15);
-            color: var(--accent-red);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-        .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
-        .btn-success {
-            background: rgba(34, 197, 94, 0.15);
-            color: var(--accent-green);
-            border: 1px solid rgba(34, 197, 94, 0.3);
-        }
-        .btn-success:hover { background: rgba(34, 197, 94, 0.25); }
-        .btn-warning {
-            background: rgba(245, 158, 11, 0.15);
-            color: var(--accent-amber);
-            border: 1px solid rgba(245, 158, 11, 0.3);
-        }
-        .btn-warning:hover { background: rgba(245, 158, 11, 0.25); }
-        .btn-sm { padding: 6px 14px; font-size: 0.78rem; }
-        .btn-xs { padding: 5px 10px; font-size: 0.72rem; border-radius: 6px; }
-
-        .content { padding: 28px 32px; flex: 1; }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
-            margin-bottom: 32px;
-        }
-        .stat-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg);
-            padding: 24px;
-            transition: all var(--transition);
-            position: relative;
-            overflow: hidden;
-        }
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 3px;
-            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-        }
-        .stat-card:nth-child(1)::before { background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan)); }
-        .stat-card:nth-child(2)::before { background: linear-gradient(90deg, var(--accent-green), #16a34a); }
-        .stat-card:nth-child(3)::before { background: linear-gradient(90deg, var(--accent-amber), #d97706); }
-        .stat-card:nth-child(4)::before { background: linear-gradient(90deg, var(--accent-purple), #9333ea); }
-        .stat-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: var(--border-light); }
-        .stat-card .stat-icon {
-            width: 44px; height: 44px;
-            border-radius: var(--radius-md);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.3rem;
-            margin-bottom: 16px;
-        }
-        .stat-card:nth-child(1) .stat-icon { background: rgba(59,130,246,0.15); }
-        .stat-card:nth-child(2) .stat-icon { background: rgba(34,197,94,0.15); }
-        .stat-card:nth-child(3) .stat-icon { background: rgba(245,158,11,0.15); }
-        .stat-card:nth-child(4) .stat-icon { background: rgba(168,85,247,0.15); }
-        .stat-card .stat-value {
-            font-size: 2rem;
-            font-weight: 800;
-            letter-spacing: -0.03em;
-            line-height: 1.1;
-        }
-        .stat-card:nth-child(1) .stat-value { color: var(--accent-blue); }
-        .stat-card:nth-child(2) .stat-value { color: var(--accent-green); }
-        .stat-card:nth-child(3) .stat-value { color: var(--accent-amber); }
-        .stat-card:nth-child(4) .stat-value { color: var(--accent-purple); }
-        .stat-card .stat-label {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            font-weight: 500;
-            margin-top: 4px;
-        }
-
-        .tabs-container {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg);
-            overflow: hidden;
-        }
-        .tabs-header {
-            display: flex;
-            border-bottom: 1px solid var(--border-color);
-            padding: 0 8px;
-            background: rgba(15,23,42,0.4);
-        }
-        .tab-btn {
-            padding: 14px 24px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: var(--text-muted);
-            background: none;
-            border: none;
-            cursor: pointer;
-            position: relative;
-            transition: all var(--transition);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .tab-btn:hover { color: var(--text-secondary); }
-        .tab-btn.active { color: var(--accent-blue); }
-        .tab-btn.active::after {
-            content: '';
-            position: absolute;
-            bottom: 0; left: 16px; right: 16px;
-            height: 2px;
-            background: var(--accent-blue);
-            border-radius: 2px 2px 0 0;
-        }
-        .tab-btn .tab-count {
-            background: var(--bg-primary);
-            font-size: 0.7rem;
-            padding: 1px 8px;
-            border-radius: 50px;
-            color: var(--text-muted);
-            font-weight: 700;
-        }
-        .tab-btn.active .tab-count { background: var(--accent-blue-glow); color: var(--accent-blue); }
-        .tab-panel { display: none; padding: 0; }
-        .tab-panel.active { display: block; }
-
-        .data-table { width: 100%; border-collapse: collapse; }
-        .data-table thead th {
-            text-align: left;
-            padding: 14px 20px;
-            font-size: 0.72rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--text-muted);
-            background: rgba(15,23,42,0.3);
-            border-bottom: 1px solid var(--border-color);
-        }
-        .data-table tbody tr {
-            border-bottom: 1px solid var(--border-color);
-            transition: background var(--transition);
-        }
-        .data-table tbody tr:last-child { border-bottom: none; }
-        .data-table tbody tr:hover { background: var(--bg-card-hover); }
-        .data-table td {
-            padding: 14px 20px;
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-            vertical-align: middle;
-        }
-        .data-table td:first-child { color: var(--text-muted); font-weight: 600; font-size: 0.8rem; }
-        .data-table .title-cell { color: var(--text-primary); font-weight: 600; }
-        .data-table .actions-cell { display: flex; gap: 8px; flex-wrap: wrap; }
-
-        .badge-status {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 4px 12px;
-            border-radius: 50px;
-            font-size: 0.72rem;
-            font-weight: 700;
-            letter-spacing: 0.02em;
-        }
-        .badge-available { background: rgba(34,197,94,0.15); color: var(--accent-green); }
-        .badge-borrowed { background: rgba(245,158,11,0.15); color: var(--accent-amber); }
-        .badge-none { background: rgba(239,68,68,0.15); color: var(--accent-red); }
-        .badge-dot {
-            width: 6px; height: 6px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-        .badge-available .badge-dot { background: var(--accent-green); }
-        .badge-borrowed .badge-dot { background: var(--accent-amber); }
-        .badge-none .badge-dot { background: var(--accent-red); }
-
-        .empty-state {
-            padding: 60px 20px;
-            text-align: center;
-            color: var(--text-muted);
-        }
-        .empty-state .empty-icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.5; }
-        .empty-state h3 { font-size: 1.1rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
-        .empty-state p { font-size: 0.85rem; }
-
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(6px);
-            -webkit-backdrop-filter: blur(6px);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-        .modal-overlay.show { display: flex; opacity: 1; }
-        .modal {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-xl);
-            width: 90%;
-            max-width: 520px;
-            box-shadow: var(--shadow-lg);
-            transform: translateY(20px) scale(0.97);
-            transition: transform 0.3s ease;
-            overflow: hidden;
-        }
-        .modal-overlay.show .modal { transform: translateY(0) scale(1); }
-        .modal-header {
-            padding: 24px 28px 20px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .modal-header h3 { font-size: 1.15rem; font-weight: 700; }
-        .modal-close {
-            width: 32px; height: 32px;
-            border-radius: 8px;
-            display: flex; align-items: center; justify-content: center;
-            background: var(--bg-primary);
-            color: var(--text-muted);
-            font-size: 1.1rem;
-            border: 1px solid var(--border-color);
-            cursor: pointer;
-            transition: all var(--transition);
-        }
-        .modal-close:hover { background: var(--bg-card-hover); color: var(--text-primary); }
-        .modal-body { padding: 24px 28px; }
-        .modal-footer {
-            padding: 16px 28px 24px;
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-        }
-        .form-group { margin-bottom: 18px; }
-        .form-group label {
-            display: block;
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--text-secondary);
-            margin-bottom: 7px;
-        }
-        .form-control {
-            width: 100%;
-            padding: 11px 16px;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-sm);
-            color: var(--text-primary);
-            font-size: 0.9rem;
-            transition: all var(--transition);
-            outline: none;
-        }
-        .form-control:focus {
-            border-color: var(--accent-blue);
-            box-shadow: 0 0 0 3px var(--accent-blue-glow);
-        }
-        .form-control::placeholder { color: var(--text-muted); }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-
-        .toast-container {
-            position: fixed;
-            top: 24px; right: 24px;
-            z-index: 2000;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .toast {
-            padding: 14px 20px;
-            border-radius: var(--radius-md);
-            font-size: 0.85rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            box-shadow: var(--shadow-lg);
-            animation: toastIn 0.4s ease-out, toastOut 0.4s ease-in 3.5s forwards;
-            min-width: 280px;
-        }
-        .toast-success { background: #065f46; color: #a7f3d0; border: 1px solid #047857; }
-        .toast-warning { background: #78350f; color: #fde68a; border: 1px solid #92400e; }
-        .toast-error { background: #7f1d1d; color: #fecaca; border: 1px solid #991b1b; }
-        @keyframes toastIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        @keyframes toastOut { from { opacity: 1; } to { opacity: 0; transform: translateY(-10px); } }
-
-        .trigger-banner {
-            background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(168,85,247,0.08));
-            border: 1px solid rgba(59,130,246,0.2);
-            border-radius: var(--radius-md);
-            padding: 16px 24px;
-            margin-bottom: 24px;
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-        }
-        .trigger-banner .banner-icon {
-            width: 38px; height: 38px;
-            background: rgba(59,130,246,0.15);
-            border-radius: var(--radius-sm);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.2rem;
-            flex-shrink: 0;
-        }
-        .trigger-banner strong { color: var(--text-primary); }
-
-        .mobile-toggle {
-            display: none;
-            position: fixed;
-            bottom: 24px; right: 24px;
-            z-index: 200;
-            width: 52px; height: 52px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-            color: #fff;
-            font-size: 1.4rem;
-            border: none;
-            box-shadow: var(--shadow-lg);
-            cursor: pointer;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .confirm-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(6px);
-            z-index: 1100;
-            align-items: center;
-            justify-content: center;
-        }
-        .confirm-overlay.show { display: flex; }
-        .confirm-box {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg);
-            padding: 32px;
-            max-width: 400px;
-            text-align: center;
-            box-shadow: var(--shadow-lg);
-        }
-        .confirm-box .confirm-icon {
-            font-size: 2.5rem;
-            margin-bottom: 16px;
-        }
-        .confirm-box h3 { font-size: 1.1rem; margin-bottom: 8px; }
-        .confirm-box p { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 24px; }
-        .confirm-box .confirm-actions { display: flex; gap: 10px; justify-content: center; }
-
-        @media (max-width: 1024px) {
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (max-width: 768px) {
-            .sidebar { transform: translateX(-100%); }
-            .sidebar.open { transform: translateX(0); }
-            .main-content { margin-left: 0; }
-            .mobile-toggle { display: flex; }
-            .stats-grid { grid-template-columns: 1fr; }
-            .topbar { padding: 14px 20px; }
-            .content { padding: 20px 16px; }
-            .form-row { grid-template-columns: 1fr; }
-        }
-
-        @keyframes shimmer { to { background-position: -200% 0; } }
-
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(16px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-in { animation: fadeInUp 0.5s ease-out both; }
-        .delay-1 { animation-delay: 0.05s; }
-        .delay-2 { animation-delay: 0.1s; }
-        .delay-3 { animation-delay: 0.15s; }
-        .delay-4 { animation-delay: 0.2s; }
-        .delay-5 { animation-delay: 0.3s; }
-        .delay-6 { animation-delay: 0.35s; }
-
-        :root {
-            --bg-primary: #101827; --bg-secondary: #152235; --bg-card: #18283d;
-            --bg-card-hover: #20344c; --bg-input: #101b2b; --bg-table-row: #17263a;
-            --bg-table-hover: #20344c; --border-color: #2b3c50; --border-light: #405873;
-            --text-primary: #e8eff8; --text-secondary: #a9b9ca; --text-muted: #7f92a7;
-            --accent-blue: #72a7ff; --accent-blue-glow: rgba(81, 145, 240, .20);
-            --accent-green: #45d6a0; --accent-green-glow: rgba(69,214,160,.13);
-            --accent-amber: #ffc46b; --accent-purple: #b4a2ff; --accent-red: #ff8e8e;
-            --sidebar-width: 244px; --radius-sm: 7px; --radius-md: 10px; --radius-lg: 12px; --radius-xl: 16px;
-            --shadow-sm: 0 1px 2px rgba(0,0,0,.15); --shadow-md: 0 5px 18px rgba(0,0,0,.18); --shadow-lg: 0 15px 38px rgba(0,0,0,.28);
-        }
-        body { background: #101827; font-size: 13px; }
-        .sidebar { background: #121f30; border-right-color: #27384b; }
-        .sidebar-brand { padding: 22px 20px 20px; border-bottom-color: #27384b; }
-        .sidebar-brand h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.3; }
-        .sidebar-brand h1 .brand-icon { width: 32px; height: 32px; background: #256b67; border-radius: 7px; font-size: .95rem; flex-shrink: 0; }
-        .nav-label { padding-left: 12px; margin-top: 15px; letter-spacing: .08em; }
-        .nav-item { border-radius: 7px; padding: 10px 13px; font-size: .82rem; }
-        .nav-item.active { background: rgba(65, 162, 155, .13); color: #7dd5ca; }
-        .nav-item .badge { background: #2a6d70; }
-        .sidebar-footer { text-align: left; padding: 17px 20px; line-height: 1.7; }
-        .main-content { background: #101827; }
-        .topbar { min-height: 52px; padding: 12px 30px; background: #131f30; border-bottom-color: #27384b; justify-content: flex-end; }
-        .topbar-left h2 { font-size: .86rem; font-weight: 600; color: #c6d4e3; letter-spacing: 0; }
-        .topbar-left h2 .crumb { color: #5b7186; margin: 0 10px; }
-        .topbar-left p { font-size: .72rem; }
-        .content { padding: 27px 30px 30px; max-width: 1600px; width: 100%; margin: 0 auto; }
-        .btn { border-radius: 7px; font-weight: 600; }
-        .btn-primary { background: #247c77; color: #f2fffd; box-shadow: none; }
-        .btn-primary:hover { background: #2b9088; box-shadow: 0 4px 14px rgba(36,124,119,.18); }
-        .btn-secondary { background: #17263a; border: 1px solid #30445a; color: #c6d4e2; }
-        .btn-secondary:hover { background: #20344c; border-color: #49627c; }
-        .btn-success { background: rgba(69,214,160,.12); color: #70e0b5; border: 1px solid rgba(69,214,160,.18); }
-        .btn-warning { background: rgba(255,196,107,.12); color: #ffd18a; border: 1px solid rgba(255,196,107,.22); }
-        .btn-danger { background: rgba(255,142,142,.1); color: #ffa1a1; border: 1px solid rgba(255,142,142,.2); }
-        .trigger-banner { background: #152c40; border-color: #294b61; color: #a9c0d2; padding: 13px 17px; margin-bottom: 19px; border-radius: 9px; }
-        .trigger-banner .banner-icon { background: #1d4056; color: #78cfc8; }
-        .trigger-banner strong { color: #d9edf3; }
-        .stats-grid { gap: 14px; margin-bottom: 21px; }
-        .stat-card { background: #152235; border-color: #2a3b50; padding: 15px 17px; border-radius: 10px; min-height: auto; }
-        .stat-card::before { display: none; }
-        .stat-card:hover { transform: translateY(-1px); border-color: #3b536b; box-shadow: var(--shadow-md); }
-        .stat-card .stat-icon { float: right; width: 26px; height: 26px; margin: 0; font-size: .9rem; background: transparent !important; color: #829bb0; }
-        .stat-card .stat-value { font-size: 1.55rem; color: #e1ebf4 !important; margin-top: 6px; }
-        .stat-card:nth-child(2) .stat-value { color: #64d4bc !important; }
-        .stat-card .stat-label { margin-top: 3px; font-size: .72rem; }
-        .tabs-container { background: #152235; border-color: #2a3b50; border-radius: 11px; }
-        .tabs-header { background: #152235; padding: 0 11px; }
-        .tab-btn { padding: 15px 17px; color: #8fa4b8; font-size: .8rem; }
-        .tab-btn.active { color: #78cfc8; }
-        .tab-btn.active::after { background: #3a9b93; left: 13px; right: 13px; }
-        .tab-btn .tab-count { background: #203047; color: #9cb0c4; }
-        .tab-btn.active .tab-count { background: rgba(58,155,147,.16); color: #80d4cb; }
-        .catalog-toolbar { display: flex; gap: 10px; align-items: center; padding: 15px 16px; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; }
-        .search-field { display: flex; align-items: center; gap: 9px; padding: 0 12px; min-width: 240px; flex: 1; height: 38px; background: #101b2b; border: 1px solid #2c4055; border-radius: 7px; color: #8197ab; }
-        .search-field span { font-size: 1.35rem; line-height: 1; }
-        .search-field input { flex: 1; min-width: 80px; background: transparent; border: 0; outline: 0; color: var(--text-primary); font: inherit; font-size: .76rem; }
-        .search-field input::placeholder { color: #7f92a7; }
-        .catalog-toolbar select { height: 38px; min-width: 122px; padding: 0 12px; background: #101b2b; border: 1px solid #2c4055; border-radius: 7px; color: #c3d0dc; font: inherit; font-size: .76rem; }
-        .sort-label { margin-left: auto; color: #879bad; font-size: .7rem; white-space: nowrap; }
-        .data-table thead th { padding: 11px 15px; background: #1a2b40; color: #91a6b8; border-bottom-color: #2b3e52; font-size: .67rem; letter-spacing: .02em; text-transform: none; }
-        .data-table tbody tr { border-bottom-color: #283a4e; }
-        .data-table tbody tr:hover { background: #1b2d43; }
-        .data-table td { padding: 12px 15px; color: #a5b6c7; font-size: .79rem; }
-        .data-table td:first-child { color: #7f93a8; font-size: .72rem; }
-        .data-table .title-cell { color: #dce8f2; }
-        .book-author-cell { min-width: 190px; }
-        .book-title, .book-author { display: block; }
-        .book-title { color: #d9e5ef; font-weight: 550; }
-        .book-author { color: #8ca1b4; font-size: .68rem; margin-top: 2px; }
-        .data-table code { white-space: nowrap; }
-        .badge-status { padding: 4px 9px; border-radius: 5px; font-size: .67rem; font-weight: 600; }
-        .badge-available { background: rgba(69,214,160,.12); color: #75dbb6; }
-        .badge-borrowed { background: rgba(255,196,107,.12); color: #ffcd85; }
-        .badge-none { background: rgba(255,142,142,.12); color: #ffa1a1; }
-        .badge-dot { width: 5px; height: 5px; }
-        .trigger-footer { display: flex; gap: 14px; align-items: center; margin-top: 22px; border: 1px solid #28534f; background: #142e3a; border-radius: 10px; padding: 15px 17px; }
-        .trigger-footer-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 7px; background: #1f494f; color: #83d5cd; font-size: 1.2rem; flex-shrink: 0; }
-        .trigger-footer-copy { display: grid; gap: 3px; flex: 1; }
-        .trigger-footer-copy strong { font-size: .78rem; color: #d4e9e8; }
-        .trigger-footer-copy span { font-size: .71rem; color: #8dbab9; }
-        .inline-action-form { display: inline-flex; margin: 0; }
-        .modal, .confirm-box { background: #152235; border-color: #30445a; }
-        .modal-header, .modal-footer { border-color: #2a3d51; }
-        .form-control { background: #101b2b; border-color: #30445a; }
-        .form-control:focus { border-color: #3b9a94; box-shadow: 0 0 0 3px rgba(59,154,148,.14); }
-        .modal-close { background: #101b2b; border-color: #30445a; }
-        .toast-success { background: #16463f; color: #a8f1dd; border-color: #276b61; }
-        @media (max-width: 768px) {
-            .content { padding: 17px 12px 24px; }
-            .topbar { padding: 13px 15px; }
-            .stats-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; }
-            .stat-card { padding: 14px; min-height: 98px; }
-            .stat-card .stat-value { font-size: 1.55rem; }
-            .catalog-toolbar { padding: 12px; }
-            .sort-label { width: 100%; margin-left: 0; }
-            .trigger-footer { align-items: flex-start; flex-wrap: wrap; }
-            .trigger-footer .btn { margin-left: 49px; }
-            .data-table td, .data-table thead th { padding: 10px 11px; }
-        }
-
-        /* Subtle visual polish without changing the existing type or palette. */
-        .sidebar { box-shadow: 8px 0 28px rgba(0,0,0,.12); }
-        .nav-item { position: relative; }
-        .nav-item.active::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 9px;
-            bottom: 9px;
-            width: 3px;
-            border-radius: 0 3px 3px 0;
-            background: #3a9b93;
-        }
-        .stat-card { background: linear-gradient(145deg, #18283d, #152235 75%); box-shadow: var(--shadow-sm); }
-        .tabs-container { box-shadow: var(--shadow-md); }
-        .tabs-header { gap: 3px; }
-        .tab-btn { border-radius: 7px 7px 0 0; }
-        .catalog-toolbar { background: rgba(16,27,43,.35); }
-        .search-field, .catalog-toolbar select {
-            transition: border-color var(--transition), box-shadow var(--transition);
-        }
-        .search-field:focus-within, .catalog-toolbar select:focus {
-            border-color: #3b9a94;
-            box-shadow: 0 0 0 3px rgba(59,154,148,.12);
-            outline: none;
-        }
-        .data-table tbody tr { transition: background var(--transition), box-shadow var(--transition); }
-        .data-table tbody tr:hover { box-shadow: inset 3px 0 #3a9b93; }
-        .badge-status { white-space: nowrap; }
-        .btn { transition: transform var(--transition), background var(--transition), border-color var(--transition), box-shadow var(--transition); }
-        .btn:active { transform: translateY(1px); }
-        :focus-visible { outline: 2px solid #72a7ff; outline-offset: 3px; }
-        .modal { max-height: calc(100vh - 32px); overflow-y: auto; }
-        .confirm-box { box-shadow: var(--shadow-lg); }
-        .toast { backdrop-filter: blur(12px); }
-        @media (max-width: 768px) {
-            .sidebar { box-shadow: 12px 0 32px rgba(0,0,0,.3); }
-            .tabs-header { overflow-x: auto; }
-            .tab-btn { flex: 0 0 auto; }
-            .search-field { min-width: 100%; }
-        }
-        .tab-panel.active { animation: fadeInUp .24s ease-out both; }
-        .mobile-toggle { transition: transform var(--transition), box-shadow var(--transition); }
-        .mobile-toggle:hover { transform: translateY(-2px); }
-        .filter-empty { padding: 38px 20px; }
-        .filter-empty[hidden] { display: none; }
-        .modal-overlay, .confirm-overlay { overscroll-behavior: contain; }
-        .modal-overlay.show .modal { will-change: transform; }
-        @media (prefers-reduced-motion: reduce) {
-            html { scroll-behavior: auto; }
-            *, *::before, *::after {
-                animation-duration: .01ms !important;
-                animation-iteration-count: 1 !important;
-                scroll-behavior: auto !important;
-                transition-duration: .01ms !important;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="assets/css/app.css?v=6">
 </head>
 <body>
     <aside class="sidebar" id="sidebar">
@@ -810,6 +41,9 @@ $msgMap = [
             </a>
             <a href="#" class="nav-item" onclick="openModal('addBookModal'); return false;">
                 <span class="nav-icon">+</span> Add new book
+            </a>
+            <a href="#" class="nav-item" onclick="openQrScanner(); return false;">
+                <span class="nav-icon">▣</span> Scan QR code
             </a>
         </nav>
     </aside>
@@ -860,13 +94,17 @@ $msgMap = [
                     </button>
                 </div>
 
-                <div class="catalog-toolbar">
-                    <label class="search-field" for="bookSearch"><span aria-hidden="true">⌕</span><input id="bookSearch" type="search" placeholder="Search by title, author, ISBN or book ID..."></label>
-                    <select id="bookStatusFilter" aria-label="Filter by availability"><option value="all">All statuses</option><option value="available">Available</option><option value="unavailable">Unavailable</option></select>
-                    <span class="sort-label" id="bookResultCount" aria-live="polite"><?= count($books) ?> books · Sorted by book ID ↑</span>
-                </div>
-
                 <div class="tab-panel active" id="panel-books" role="tabpanel" aria-labelledby="tab-books">
+                    <div class="catalog-toolbar">
+                        <label class="search-field" for="bookSearch"><span aria-hidden="true">⌕</span><input id="bookSearch" type="search" placeholder="Search by title, author, ISBN or book ID..."></label>
+                        <select id="bookStatusFilter" aria-label="Filter by availability">
+                            <option value="all">All statuses</option>
+                            <option value="available">Available</option>
+                            <option value="unavailable">Unavailable</option>
+                        </select>
+                        <button type="button" class="btn btn-secondary btn-sm" id="clearBookFilters" disabled>Clear filters</button>
+                        <span class="sort-label" id="bookResultCount" aria-live="polite"><?= count($books) ?> books · Sorted by book ID ↑</span>
+                    </div>
                     <?php if (count($books) > 0): ?>
                     <div style="overflow-x:auto;">
                         <table class="data-table" id="books-table">
@@ -882,14 +120,16 @@ $msgMap = [
                             </thead>
                             <tbody>
                                 <?php foreach ($books as $book): ?>
-                                <tr data-search="<?= htmlspecialchars(strtolower($book['book_id'].' '.$book['title'].' '.$book['author'].' '.$book['isbn']), ENT_QUOTES) ?>" data-status="<?= $book['available_copies'] > 0 ? 'available' : 'unavailable' ?>">
-                                    <td>#<?= $book['book_id'] ?></td>
-                                    <td class="book-author-cell"><span class="book-title"><?= htmlspecialchars($book['title']) ?></span><span class="book-author"><?= htmlspecialchars($book['author']) ?></span></td>
-                                    <td><code style="background:var(--bg-primary);padding:3px 8px;border-radius:4px;font-size:0.78rem;color:var(--text-muted);"><?= htmlspecialchars($book['isbn']) ?></code></td>
+                                <tr data-isbn="<?= htmlspecialchars($book['isbn'], ENT_QUOTES, 'UTF-8') ?>" data-search="<?= htmlspecialchars(strtolower($book['book_id'].' '.$book['title'].' '.$book['author'].' '.$book['isbn']), ENT_QUOTES) ?>" data-status="<?= $book['available_copies'] > 0 ? 'available' : 'unavailable' ?>">
+                                    <td><span class="mobile-cell-label">Book ID</span>#<?= $book['book_id'] ?></td>
+                                    <td class="book-author-cell"><span class="mobile-cell-label">Book / author</span><span class="book-title"><?= htmlspecialchars($book['title']) ?></span><span class="book-author"><?= htmlspecialchars($book['author']) ?></span></td>
+                                    <td><span class="mobile-cell-label">ISBN</span><code style="background:var(--bg-primary);padding:3px 8px;border-radius:4px;font-size:0.78rem;color:var(--text-muted);"><?= htmlspecialchars($book['isbn']) ?></code></td>
                                     <td>
+                                        <span class="mobile-cell-label">Available copies</span>
                                         <strong style="color:var(--text-primary);"><?= $book['available_copies'] ?></strong>
                                     </td>
                                     <td>
+                                        <span class="mobile-cell-label">Status</span>
                                         <?php if ($book['available_copies'] > 0): ?>
                                             <span class="badge-status badge-available"><span class="badge-dot"></span> Available</span>
                                         <?php else: ?>
@@ -897,9 +137,10 @@ $msgMap = [
                                         <?php endif; ?>
                                     </td>
                                     <td>
+                                        <span class="mobile-cell-label">Actions</span>
                                         <div class="actions-cell">
                                             <?php if ($book['available_copies'] > 0): ?>
-                                            <button class="btn btn-success btn-xs" onclick="openBorrowModal(<?= $book['book_id'] ?>, '<?= addslashes(htmlspecialchars($book['title'])) ?>');">
+                                            <button type="button" class="btn btn-success btn-xs" data-book-id="<?= (int)$book['book_id'] ?>" data-book-title="<?= htmlspecialchars($book['title'], ENT_QUOTES, 'UTF-8') ?>" data-book-isbn="<?= htmlspecialchars($book['isbn'], ENT_QUOTES, 'UTF-8') ?>" onclick="openBorrowModal(this.dataset.bookId, this.dataset.bookTitle, this.dataset.bookIsbn);">
                                                  Borrow
                                             </button>
                                             <?php else: ?>
@@ -907,8 +148,11 @@ $msgMap = [
                                                  Borrow
                                             </button>
                                             <?php endif; ?>
-                                            <button class="btn btn-danger btn-xs" onclick="confirmDelete(<?= $book['book_id'] ?>, '<?= addslashes(htmlspecialchars($book['title'])) ?>');">
+                                            <button type="button" class="btn btn-danger btn-xs" data-book-id="<?= (int)$book['book_id'] ?>" data-book-title="<?= htmlspecialchars($book['title'], ENT_QUOTES, 'UTF-8') ?>" onclick="confirmDelete(this.dataset.bookId, this.dataset.bookTitle);">
                                                  Delete
+                                            </button>
+                                            <button type="button" class="btn btn-secondary btn-xs" data-book-id="<?= (int)$book['book_id'] ?>" data-book-title="<?= htmlspecialchars($book['title'], ENT_QUOTES, 'UTF-8') ?>" data-book-isbn="<?= htmlspecialchars($book['isbn'], ENT_QUOTES, 'UTF-8') ?>" onclick="manageBookCopies(this);">
+                                                Copies / QR
                                             </button>
                                         </div>
                                     </td>
@@ -942,24 +186,29 @@ $msgMap = [
                                     <th>Borrower</th>
                                     <th>Borrow Date</th>
                                     <th>Status</th>
-                                    <th>Action</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php foreach ($loans as $loan): ?>
                                 <tr>
-                                    <td>#<?= $loan['loan_id'] ?></td>
-                                    <td class="title-cell"><?= htmlspecialchars($loan['title']) ?></td>
-                                    <td><?= htmlspecialchars($loan['borrower_name']) ?></td>
-                                    <td><?= $loan['borrow_date'] ?></td>
+                                    <td><span class="mobile-cell-label">Loan ID</span>#<?= $loan['loan_id'] ?><br><span class="book-author">Copy #<?= (int)$loan['copy_id'] ?></span></td>
+                                    <td class="title-cell"><span class="mobile-cell-label">Book title</span><?= htmlspecialchars($loan['title']) ?></td>
+                                    <td><span class="mobile-cell-label">Borrower</span><?= htmlspecialchars($loan['borrower_name']) ?></td>
+                                    <td><span class="mobile-cell-label">Borrow date</span><?= $loan['borrow_date'] ?></td>
                                     <td>
+                                        <span class="mobile-cell-label">Status</span>
                                         <span class="badge-status badge-borrowed"><span class="badge-dot"></span> Borrowed</span>
                                     </td>
                                     <td>
-                                        <form action="action.php?action=return" method="POST" onsubmit="return confirm('Return this book?');" class="inline-action-form">
-                                            <input type="hidden" name="loan_id" value="<?= (int)$loan['loan_id'] ?>">
-                                            <button type="submit" class="btn btn-warning btn-xs">↩ Return book</button>
-                                        </form>
+                                        <span class="mobile-cell-label">Actions</span>
+                                        <div class="actions-cell">
+                                            <form action="action.php?action=return" method="POST" onsubmit="return confirm('Return this book?');" class="inline-action-form">
+                                                <input type="hidden" name="loan_id" value="<?= (int)$loan['loan_id'] ?>">
+                                                <button type="submit" class="btn btn-warning btn-xs">↩ Return book</button>
+                                            </form>
+                                            <button type="button" class="btn btn-secondary btn-xs" data-copy-id="<?= (int)$loan['copy_id'] ?>" data-book-title="<?= htmlspecialchars($loan['title'], ENT_QUOTES, 'UTF-8') ?>" data-book-isbn="<?= htmlspecialchars($loan['isbn'], ENT_QUOTES, 'UTF-8') ?>" data-copy-status="Borrowed" onclick="showCopyQr(this);">Copy QR</button>
+                                        </div>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>
@@ -990,14 +239,15 @@ $msgMap = [
                             <tbody>
                                 <?php foreach ($logs as $log): ?>
                                 <tr>
-                                    <td>#<?= $log['log_id'] ?></td>
+                                    <td><span class="mobile-cell-label">Log ID</span>#<?= $log['log_id'] ?></td>
                                     <td>
+                                        <span class="mobile-cell-label">Action</span>
                                         <span class="badge-status" style="background:rgba(168,85,247,0.15);color:var(--accent-purple);">
                                             <?= htmlspecialchars($log['action'] ?? $log['action_type'] ?? 'N/A') ?>
                                         </span>
                                     </td>
-                                    <td style="max-width:400px;word-wrap:break-word;"><?= htmlspecialchars($log['details'] ?? $log['description'] ?? 'N/A') ?></td>
-                                    <td style="white-space:nowrap;"><?= $log['timestamp'] ?? $log['created_at'] ?? 'N/A' ?></td>
+                                    <td style="max-width:400px;word-wrap:break-word;"><span class="mobile-cell-label">Details</span><?= htmlspecialchars($log['details'] ?? $log['description'] ?? 'N/A') ?></td>
+                                    <td style="white-space:nowrap;"><span class="mobile-cell-label">Timestamp</span><?= $log['timestamp'] ?? $log['created_at'] ?? 'N/A' ?></td>
                                 </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -1057,11 +307,13 @@ $msgMap = [
             </div>
             <form action="action.php?action=borrow" method="POST">
                 <input type="hidden" name="book_id" id="borrow-book-id">
+                <input type="hidden" name="copy_id" id="borrow-copy-id">
                 <div class="modal-body">
                     <div class="form-group">
                         <label>Selected Book</label>
                         <div id="borrow-book-title" style="padding:11px 16px;background:var(--bg-input);border:1px solid var(--border-color);border-radius:var(--radius-sm);color:var(--accent-blue);font-weight:600;font-size:0.9rem;"></div>
                     </div>
+                    <p class="qr-book-details" id="borrow-book-isbn"></p>
                     <div class="form-group">
                         <label for="borrow-name">Borrower's Full Name</label>
                         <input type="text" id="borrow-name" name="borrower_name" class="form-control" placeholder="Enter borrower's full name" required>
@@ -1072,6 +324,96 @@ $msgMap = [
                     <button type="submit" class="btn btn-success btn-sm"> Confirm Borrow</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="bookQrModal" aria-hidden="true">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="bookQrTitle">
+            <div class="modal-header">
+                <h3 id="bookQrTitle">Reusable physical copy QR code</h3>
+                <button type="button" class="modal-close" aria-label="Close QR code dialog" onclick="closeModal('bookQrModal');">✕</button>
+            </div>
+            <div class="modal-body">
+                <h2 class="qr-print-title" id="bookQrPrintTitle"></h2>
+                <p class="qr-book-details" id="bookQrDetails"></p>
+                <p class="qr-help" id="bookQrReuseHelp">This QR identifies one physical copy. Keep the label attached to the book; scanning it borrows the copy when available or starts its return when checked out.</p>
+                <div class="qr-url-controls">
+                    <label class="form-group" for="phoneAppUrl">
+                        <span>Laptop address for the phone</span>
+                        <span class="qr-url-row">
+                            <input type="url" id="phoneAppUrl" class="form-control" autocomplete="url" spellcheck="false">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="refreshBookQr();">Update QR</button>
+                        </span>
+                    </label>
+                    <p class="qr-help" id="qrAddressHelp">This address is detected from the laptop running XAMPP. Keep the phone on the same Wi-Fi network. If the address is not reachable, enter the laptop's Wi-Fi IPv4 address instead.</p>
+                </div>
+                <div class="qr-preview" id="bookQrCode" aria-label="Generated book QR code"></div>
+                <p class="qr-book-details" id="bookQrTarget"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('bookQrModal');">Close</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="copyBookQrLink();">Copy link</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="printBookQr();">Print QR</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="bookCopiesModal" aria-hidden="true">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="bookCopiesTitle">
+            <div class="modal-header">
+                <h3 id="bookCopiesTitle">Physical copies and QR codes</h3>
+                <button type="button" class="modal-close" aria-label="Close physical copies dialog" onclick="closeModal('bookCopiesModal');">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="qr-book-details" id="bookCopiesBookTitle"></p>
+                <p class="qr-help">Print one QR per physical copy and attach it to that copy. The same label works for borrowing and returning.</p>
+                <div class="book-copies-list" id="bookCopiesList"></div>
+                <form action="action.php?action=add_copy" method="POST" class="add-copy-form">
+                    <input type="hidden" name="book_id" id="add-copy-book-id">
+                    <button type="submit" class="btn btn-secondary btn-sm">+ Add physical copy</button>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('bookCopiesModal');">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="qrScannerModal" aria-hidden="true">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="qrScannerTitle">
+            <div class="modal-header">
+                <h3 id="qrScannerTitle">Scan a book or loan QR code</h3>
+                <button type="button" class="modal-close" aria-label="Close QR scanner" onclick="closeQrScanner();">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="qr-help">Scan a copy QR to borrow it when available or start its return when checked out. A return still asks you to confirm.</p>
+                <div id="qrScannerReader" class="qr-scanner-reader"></div>
+                <p id="qrScannerStatus" class="qr-scanner-status" role="status" aria-live="polite">Choose a camera or scan a QR image.</p>
+                <div class="qr-scanner-actions">
+                    <button type="button" class="btn btn-primary btn-sm" id="startQrCamera" onclick="startQrCamera();">Use camera</button>
+                    <label class="btn btn-secondary btn-sm qr-image-label" for="qrImageInput">Scan QR image
+                        <input type="file" id="qrImageInput" accept="image/*" capture="environment">
+                    </label>
+                </div>
+                <p class="qr-help">Camera scanning needs browser permission and a secure connection (localhost or HTTPS). On a phone using local Wi-Fi HTTP, use “Scan QR image” to open the camera.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeQrScanner();">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="confirm-overlay" id="qrReturnConfirmOverlay" aria-hidden="true">
+        <div class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="qrReturnConfirmTitle" tabindex="-1">
+            <h3 id="qrReturnConfirmTitle">Confirm book return</h3>
+            <p id="qrReturnConfirmDetails"></p>
+            <div class="confirm-actions">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeQrReturnConfirm();">Cancel</button>
+                <form action="action.php?action=return" method="POST" class="inline-action-form">
+                    <input type="hidden" name="loan_id" id="qrReturnLoanId">
+                    <button type="submit" class="btn btn-warning btn-sm">Confirm return</button>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -1094,173 +436,8 @@ $msgMap = [
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
-        const modalReturnFocus = new Map();
-
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                const isActive = btn.dataset.tab === tabName;
-                btn.classList.toggle('active', isActive);
-                btn.setAttribute('aria-selected', String(isActive));
-            });
-            document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
-            document.getElementById(`panel-${tabName}`).classList.add('active');
-
-            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-            const navItem = document.querySelector(`.nav-item[data-section="${tabName}"]`);
-            if (navItem) navItem.classList.add('active');
-            document.getElementById('tabs-container').scrollIntoView({
-                behavior: prefersReducedMotion ? 'auto' : 'smooth',
-                block: 'start'
-            });
-            closeSidebar();
-        }
-
-        function scrollToTop() {
-            window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
-            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-            document.querySelector('.nav-item[data-section="dashboard"]').classList.add('active');
-            closeSidebar();
-        }
-
-        function openModal(id) {
-            const modal = document.getElementById(id);
-            modalReturnFocus.set(id, document.activeElement);
-            modal.setAttribute('aria-hidden', 'false');
-            modal.style.display = 'flex';
-            requestAnimationFrame(() => {
-                if (modal.getAttribute('aria-hidden') === 'true') return;
-                modal.classList.add('show');
-                modal.querySelector('.modal-body input:not([type="hidden"])')?.focus();
-            });
-        }
-        function closeModal(id) {
-            const modal = document.getElementById(id);
-            modal.classList.remove('show');
-            modal.setAttribute('aria-hidden', 'true');
-            setTimeout(() => {
-                if (modal.classList.contains('show')) return;
-                modal.style.display = 'none';
-                modalReturnFocus.get(id)?.focus();
-                modalReturnFocus.delete(id);
-            }, 300);
-        }
-        function openBorrowModal(bookId, bookTitle) {
-            document.getElementById('borrow-book-id').value = bookId;
-            document.getElementById('borrow-book-title').textContent = bookTitle;
-            document.getElementById('borrow-name').value = '';
-            openModal('borrowModal');
-        }
-
-        function confirmDelete(bookId, bookTitle) {
-            const overlay = document.getElementById('confirmDeleteOverlay');
-            modalReturnFocus.set('confirmDeleteOverlay', document.activeElement);
-            document.getElementById('confirm-delete-text').textContent =
-                `Are you sure you want to delete "${bookTitle}"? The BEFORE DELETE trigger will archive this record to audit logs automatically.`;
-            document.getElementById('confirm-delete-book-id').value = bookId;
-            overlay.setAttribute('aria-hidden', 'false');
-            overlay.classList.add('show');
-            overlay.querySelector('.confirm-box').focus();
-        }
-        function closeConfirm() {
-            document.getElementById('confirmDeleteOverlay').classList.remove('show');
-            document.getElementById('confirmDeleteOverlay').setAttribute('aria-hidden', 'true');
-            modalReturnFocus.get('confirmDeleteOverlay')?.focus();
-            modalReturnFocus.delete('confirmDeleteOverlay');
-        }
-
-        function toggleSidebar() {
-            const isOpen = document.getElementById('sidebar').classList.toggle('open');
-            const toggle = document.getElementById('mobileToggle');
-            toggle.setAttribute('aria-expanded', String(isOpen));
-            toggle.setAttribute('aria-label', isOpen ? 'Close navigation menu' : 'Open navigation menu');
-        }
-        function closeSidebar() {
-            document.getElementById('sidebar').classList.remove('open');
-            document.getElementById('mobileToggle').setAttribute('aria-expanded', 'false');
-            document.getElementById('mobileToggle').setAttribute('aria-label', 'Open navigation menu');
-        }
-        document.querySelectorAll('.modal-overlay').forEach(overlay => {
-            overlay.addEventListener('click', function(e) {
-                if (e.target === this) {
-                    closeModal(this.id);
-                }
-            });
-        });
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                const openModalOverlay = document.querySelector('.modal-overlay.show');
-                if (openModalOverlay) closeModal(openModalOverlay.id);
-                else if (document.getElementById('confirmDeleteOverlay').classList.contains('show')) closeConfirm();
-                return;
-            }
-
-            if (e.key === 'Tab') {
-                const activeDialog = document.querySelector('.modal-overlay.show .modal, .confirm-overlay.show .confirm-box');
-                if (!activeDialog) return;
-                const focusable = [...activeDialog.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')];
-                if (focusable.length === 0) {
-                    e.preventDefault();
-                    activeDialog.focus();
-                    return;
-                }
-                const first = focusable[0];
-                const last = focusable[focusable.length - 1];
-                if (e.shiftKey && (document.activeElement === first || document.activeElement === activeDialog)) {
-                    e.preventDefault();
-                    last.focus();
-                } else if (!e.shiftKey && document.activeElement === last) {
-                    e.preventDefault();
-                    first.focus();
-                }
-            }
-        });
-
-        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const bookSearch = document.getElementById('bookSearch');
-        const bookStatusFilter = document.getElementById('bookStatusFilter');
-        function filterBooks() {
-            const query = (bookSearch?.value || '').trim().toLowerCase();
-            const status = bookStatusFilter?.value || 'all';
-            const rows = [...document.querySelectorAll('#books-table tbody tr')];
-            let visibleCount = 0;
-            rows.forEach(row => {
-                const matchesText = (row.dataset.search || '').includes(query);
-                const matchesStatus = status === 'all' || row.dataset.status === status;
-                row.hidden = !(matchesText && matchesStatus);
-                if (!row.hidden) visibleCount++;
-            });
-            const noResults = document.getElementById('bookNoResults');
-            if (noResults) noResults.hidden = visibleCount > 0;
-            const resultCount = document.getElementById('bookResultCount');
-            if (resultCount) {
-                resultCount.textContent = query || status !== 'all'
-                    ? `Showing ${visibleCount} of ${rows.length} books · Sorted by book ID ↑`
-                    : `${rows.length} books · Sorted by book ID ↑`;
-            }
-        }
-        bookSearch?.addEventListener('input', filterBooks);
-        bookStatusFilter?.addEventListener('change', filterBooks);
-
-        function showToast(message, type = 'success') {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            toast.className = `toast toast-${type}`;
-            toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
-            toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
-            const text = document.createElement('span');
-            text.textContent = message;
-            toast.appendChild(text);
-            container.appendChild(toast);
-            setTimeout(() => toast.remove(), 4000);
-        }
-
-        <?php if ($msg && isset($msgMap[$msg])): ?>
-        window.addEventListener('DOMContentLoaded', () => {
-            showToast('<?= $msgMap[$msg][0] ?>', '<?= $msgMap[$msg][1] ?>');
-            history.replaceState(null, '', window.location.pathname);
-        });
-        <?php endif; ?>
+        window.libraryAppConfig = <?= json_encode($pageConfig, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
     </script>
+    <script src="assets/js/app.js?v=4" defer></script>
 </body>
 </html>
